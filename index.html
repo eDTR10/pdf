@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICT | PDF Merger</title>
+    <link rel="shortcut icon" href="./DICT-Logo-icon_only.png" type="image/x-icon">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <link rel="stylesheet" href="./main.css">
+</head>
+<body>
+    
+    <div class="container">
+        
+        <h1>PDF Merger & Image Converter</h1>
+        
+        <div class="upload-section">
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">📁</div>
+                    <div class="drop-text">Drop files here or click to select</div>
+                    <div class="drop-subtext">Supports PDF files and images (JPG, PNG, GIF, BMP, WebP)</div>
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" class="file-input" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp" multiple>
+                </div>
+            </div>
+        </div>
+
+        <div class="file-list" id="fileList">
+            <div class="empty-state">
+                No files selected. Choose PDF files and images to get started.
+            </div>
+        </div>
+
+        <button class="merge-button" id="mergeButton" disabled>
+            🔄 Convert & Merge to PDF
+        </button>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <div class="cred">
+            <p>Developed by: DICT 10 🤙 </p>
+        </div>
+
+    <script>
+        let selectedFiles = [];
+        let draggedElement = null;
+
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const fileList = document.getElementById('fileList');
+        const mergeButton = document.getElementById('mergeButton');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // File input and drop zone event listeners
+        fileInput.addEventListener('change', handleFileSelect);
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleFileDrop);
+        mergeButton.addEventListener('click', mergePDFs);
+
+        // Prevent default drag behaviors on the whole document
+        document.addEventListener('dragover', (e) => e.preventDefault());
+        document.addEventListener('drop', (e) => e.preventDefault());
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            addFiles(files);
+        }
+
+        function handleFileDrop(event) {
+            event.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const files = Array.from(event.dataTransfer.files);
+            addFiles(files);
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            dropZone.classList.add('drag-over');
+        }
+
+        function handleDragLeave(event) {
+            event.preventDefault();
+            // Only remove drag-over if we're leaving the drop zone completely
+            if (!dropZone.contains(event.relatedTarget)) {
+                dropZone.classList.remove('drag-over');
+            }
+        }
+
+        function addFiles(files) {
+            let addedCount = 0;
+            
+            files.forEach(file => {
+                if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+                    selectedFiles.push(file);
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                renderFileList();
+                updateMergeButton();
+                showStatus(`Added ${addedCount} file(s) successfully!`, 'success');
+            } else {
+                showStatus('No supported files found. Please select PDF files or images.', 'error');
+            }
+        }
+
+        function getFileType(file) {
+            if (file.type === 'application/pdf') {
+                return 'pdf';
+            } else if (file.type.startsWith('image/')) {
+                return 'image';
+            }
+            return 'unknown';
+        }
+
+        function getFileIcon(fileType) {
+            switch (fileType) {
+                case 'pdf':
+                    return { text: 'PDF', class: 'pdf' };
+                case 'image':
+                    return { text: 'IMG', class: 'image' };
+                default:
+                    return { text: '?', class: 'pdf' };
+            }
+        }
+
+        function renderFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.innerHTML = '<div class="empty-state">No files selected. Choose PDF files and images to get started.</div>';
+                return;
+            }
+
+            fileList.innerHTML = selectedFiles.map((file, index) => {
+                const fileType = getFileType(file);
+                const icon = getFileIcon(fileType);
+                
+                return `
+                    <div class="file-item" draggable="true" data-index="${index}">
+                        <div class="file-info">
+                            <span class="drag-handle">⋮⋮</span>
+                            <div class="file-icon ${icon.class}">${icon.text}</div>
+                            <div>
+                                <div class="file-name">${file.name}</div>
+                                <div class="file-size">${formatFileSize(file.size)}</div>
+                            </div>
+                        </div>
+                        <button class="remove-btn" onclick="removeFile(${index})">✕</button>
+                    </div>
+                `;
+            }).join('');
+
+            // Add drag and drop functionality for file reordering
+            const fileItems = fileList.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }
+
+        // Add drag and drop functionality for file reordering
+        function handleDragStart(e) {
+            draggedElement = e.target;
+            e.target.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            if (draggedElement !== e.target) {
+                const draggedIndex = parseInt(draggedElement.dataset.index);
+                const targetIndex = parseInt(e.target.dataset.index);
+                
+                // Swap elements in array
+                const temp = selectedFiles[draggedIndex];
+                selectedFiles[draggedIndex] = selectedFiles[targetIndex];
+                selectedFiles[targetIndex] = temp;
+                
+                renderFileList();
+            }
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            draggedElement = null;
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+            updateMergeButton();
+        }
+
+        function updateMergeButton() {
+            mergeButton.disabled = selectedFiles.length < 1;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showProgress(percent) {
+            progressBar.style.display = 'block';
+            progressFill.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            progressBar.style.display = 'none';
+            progressFill.style.width = '0%';
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusMessage.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        async function imageToPDF(imageFile) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                img.onload = async () => {
+                    // Set canvas size to image size
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+
+                    // Draw image on canvas
+                    ctx.drawImage(img, 0, 0);
+
+                    // Convert canvas to blob
+                    canvas.toBlob(async (blob) => {
+                        try {
+                            const arrayBuffer = await blob.arrayBuffer();
+                            const pdfDoc = await PDFLib.PDFDocument.create();
+                            
+                            let image;
+                            if (imageFile.type === 'image/jpeg' || imageFile.type === 'image/jpg') {
+                                image = await pdfDoc.embedJpg(arrayBuffer);
+                            } else {
+                                // Convert other formats to PNG
+                                const pngArrayBuffer = await new Promise((resolve) => {
+                                    canvas.toBlob(async (pngBlob) => {
+                                        resolve(await pngBlob.arrayBuffer());
+                                    }, 'image/png');
+                                });
+                                image = await pdfDoc.embedPng(pngArrayBuffer);
+                            }
+
+                            // Calculate page size to fit image
+                            const { width, height } = image;
+                            const maxWidth = 595; // A4 width in points
+                            const maxHeight = 842; // A4 height in points
+                            
+                            let pageWidth = width;
+                            let pageHeight = height;
+                            
+                            // Scale down if too large
+                            if (width > maxWidth || height > maxHeight) {
+                                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                                pageWidth = width * ratio;
+                                pageHeight = height * ratio;
+                            }
+
+                            const page = pdfDoc.addPage([pageWidth, pageHeight]);
+                            page.drawImage(image, {
+                                x: 0,
+                                y: 0,
+                                width: pageWidth,
+                                height: pageHeight,
+                            });
+
+                            resolve(pdfDoc);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }, 'image/jpeg', 0.8);
+                };
+
+                img.onerror = reject;
+                img.src = URL.createObjectURL(imageFile);
+            });
+        }
+
+        async function mergePDFs() {
+            if (selectedFiles.length < 1) return;
+
+            try {
+                mergeButton.disabled = true;
+                showProgress(0);
+                showStatus('Starting conversion and merge process...', 'success');
+
+                const mergedPdf = await PDFLib.PDFDocument.create();
+                
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const fileType = getFileType(file);
+                    
+                    let pdf;
+                    if (fileType === 'pdf') {
+                        const arrayBuffer = await file.arrayBuffer();
+                        pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+                    } else if (fileType === 'image') {
+                        showStatus(`Converting image ${i + 1} of ${selectedFiles.length}...`, 'success');
+                        pdf = await imageToPDF(file);
+                    }
+                    
+                    if (pdf) {
+                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                    }
+                    
+                    showProgress(((i + 1) / selectedFiles.length) * 100);
+                }
+
+                showStatus('Generating final PDF...', 'success');
+                const pdfBytes = await mergedPdf.save();
+                
+                // Create download link
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'merged-document.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showStatus('Files converted and merged successfully! Download started.', 'success');
+                hideProgress();
+            } catch (error) {
+                console.error('Error processing files:', error);
+                showStatus('Error processing files. Please try again.', 'error');
+                hideProgress();
+            } finally {
+                mergeButton.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
