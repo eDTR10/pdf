@@ -320,6 +320,10 @@
             opacity: 1;
         }
         @media screen and (max-width: 600px) {
+             body {
+            
+            transform: scale(1);
+        }
             .container {
                 padding: 20px;
             }
