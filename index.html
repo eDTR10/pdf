@@ -9,9 +9,7 @@
     <link rel="stylesheet" href="./main.css">
 </head>
 <body>
-    
     <div class="container">
-        
         <h1>PDF Merger & Image Converter</h1>
         
         <div class="upload-section">
@@ -33,6 +31,12 @@
             </div>
         </div>
 
+        <div class="filename-input-section">
+            <label for="filenameInput">Output filename:</label>
+            <input type="text" id="filenameInput" class="filename-input" placeholder="Enter filename (without .pdf extension)">
+            <button class="auto-generate-btn" id="autoGenerateBtn">Auto-generate from files</button>
+        </div>
+
         <button class="merge-button" id="mergeButton" disabled>
             🔄 Convert & Merge to PDF
         </button>
@@ -45,12 +49,12 @@
     </div>
 
     <div class="cred">
-            <p>Developed by: DICT 10 🤙👀 </p>
-        </div>
+        <p>Developed by: DICT 10 🤙👀 </p>
+    </div>
 
     <script>
         let selectedFiles = [];
-        let draggedElement = null;
+        let draggedIndex = null;
 
         const fileInput = document.getElementById('fileInput');
         const dropZone = document.getElementById('dropZone');
@@ -59,16 +63,19 @@
         const progressBar = document.getElementById('progressBar');
         const progressFill = document.getElementById('progressFill');
         const statusMessage = document.getElementById('statusMessage');
+        const filenameInput = document.getElementById('filenameInput');
+        const autoGenerateBtn = document.getElementById('autoGenerateBtn');
 
-        // File input and drop zone event listeners
+        // Event listeners
         fileInput.addEventListener('change', handleFileSelect);
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', handleDragOver);
         dropZone.addEventListener('dragleave', handleDragLeave);
         dropZone.addEventListener('drop', handleFileDrop);
         mergeButton.addEventListener('click', mergePDFs);
+        autoGenerateBtn.addEventListener('click', generateFilename);
 
-        // Prevent default drag behaviors on the whole document
+        // Prevent default drag behaviors
         document.addEventListener('dragover', (e) => e.preventDefault());
         document.addEventListener('drop', (e) => e.preventDefault());
 
@@ -92,7 +99,6 @@
 
         function handleDragLeave(event) {
             event.preventDefault();
-            // Only remove drag-over if we're leaving the drop zone completely
             if (!dropZone.contains(event.relatedTarget)) {
                 dropZone.classList.remove('drag-over');
             }
@@ -159,39 +165,67 @@
                         </div>
                         <button class="remove-btn" onclick="removeFile(${index})">✕</button>
                     </div>
+                    <div class="drag-placeholder" data-index="${index}"></div>
                 `;
             }).join('');
 
-            // Add drag and drop functionality for file reordering
+            // Add drag and drop functionality
             const fileItems = fileList.querySelectorAll('.file-item');
             fileItems.forEach(item => {
                 item.addEventListener('dragstart', handleDragStart);
-                item.addEventListener('dragover', handleDragOver);
-                item.addEventListener('drop', handleDrop);
+                item.addEventListener('dragover', handleItemDragOver);
+                item.addEventListener('drop', handleItemDrop);
                 item.addEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragenter', handleDragEnter);
+                item.addEventListener('dragleave', handleItemDragLeave);
             });
         }
 
-        // Add drag and drop functionality for file reordering
         function handleDragStart(e) {
-            draggedElement = e.target;
+            draggedIndex = parseInt(e.target.dataset.index);
             e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
         }
 
-        function handleDragOver(e) {
+        function handleItemDragOver(e) {
             e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
         }
 
-        function handleDrop(e) {
+        function handleDragEnter(e) {
             e.preventDefault();
-            if (draggedElement !== e.target) {
-                const draggedIndex = parseInt(draggedElement.dataset.index);
-                const targetIndex = parseInt(e.target.dataset.index);
+            const targetIndex = parseInt(e.target.dataset.index);
+            if (draggedIndex !== null && targetIndex !== draggedIndex) {
+                e.target.classList.add('drag-over');
                 
-                // Swap elements in array
-                const temp = selectedFiles[draggedIndex];
-                selectedFiles[draggedIndex] = selectedFiles[targetIndex];
-                selectedFiles[targetIndex] = temp;
+                // Show placeholder
+                const placeholder = document.querySelector(`[data-index="${targetIndex}"] + .drag-placeholder`);
+                if (placeholder) {
+                    placeholder.classList.add('show');
+                }
+            }
+        }
+
+        function handleItemDragLeave(e) {
+            e.target.classList.remove('drag-over');
+            const placeholder = document.querySelector(`[data-index="${e.target.dataset.index}"] + .drag-placeholder`);
+            if (placeholder) {
+                placeholder.classList.remove('show');
+            }
+        }
+
+        function handleItemDrop(e) {
+            e.preventDefault();
+            e.target.classList.remove('drag-over');
+            
+            const targetIndex = parseInt(e.target.dataset.index);
+            
+            if (draggedIndex !== null && targetIndex !== draggedIndex) {
+                // Remove item from original position
+                const draggedFile = selectedFiles.splice(draggedIndex, 1)[0];
+                
+                // Insert at new position
+                selectedFiles.splice(targetIndex, 0, draggedFile);
                 
                 renderFileList();
             }
@@ -199,7 +233,9 @@
 
         function handleDragEnd(e) {
             e.target.classList.remove('dragging');
-            draggedElement = null;
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.drag-placeholder.show').forEach(el => el.classList.remove('show'));
+            draggedIndex = null;
         }
 
         function removeFile(index) {
@@ -210,6 +246,83 @@
 
         function updateMergeButton() {
             mergeButton.disabled = selectedFiles.length < 1;
+        }
+
+        function generateFilename() {
+            if (selectedFiles.length === 0) {
+                showStatus('Please add files first to generate filename', 'error');
+                return;
+            }
+
+            const filenames = selectedFiles.map(file => file.name.replace(/\.[^/.]+$/, "")); // Remove extensions
+            const consolidatedName = consolidateFilenames(filenames);
+            filenameInput.value = consolidatedName;
+        }
+
+        function consolidateFilenames(filenames) {
+            if (filenames.length === 0) return '';
+            if (filenames.length === 1) return filenames[0];
+
+            // Find common parts and unique parts
+            const commonParts = [];
+            const uniqueParts = [];
+
+            // Split each filename into parts (separated by underscore)
+            const filenameParts = filenames.map(name => name.split('_'));
+            
+            // Find the longest common prefix
+            let commonPrefix = '';
+            const firstParts = filenameParts[0];
+            
+            for (let i = 0; i < firstParts.length; i++) {
+                const part = firstParts[i];
+                const isCommon = filenameParts.every(parts => parts[i] === part);
+                
+                if (isCommon) {
+                    commonParts.push(part);
+                } else {
+                    break;
+                }
+            }
+
+            // Collect unique parts (parts that are not common)
+            filenameParts.forEach(parts => {
+                for (let i = commonParts.length; i < parts.length; i++) {
+                    const part = parts[i];
+                    if (!uniqueParts.includes(part) && part.trim() !== '') {
+                        uniqueParts.push(part);
+                    }
+                }
+            });
+
+            // Find common suffix
+            const commonSuffix = [];
+            const minLength = Math.min(...filenameParts.map(parts => parts.length));
+            
+            for (let i = 1; i <= minLength - commonParts.length; i++) {
+                const suffixPart = firstParts[firstParts.length - i];
+                const isCommonSuffix = filenameParts.every(parts => 
+                    parts[parts.length - i] === suffixPart
+                );
+                
+                if (isCommonSuffix) {
+                    commonSuffix.unshift(suffixPart);
+                } else {
+                    break;
+                }
+            }
+
+            // Remove common suffix from unique parts
+            commonSuffix.forEach(suffix => {
+                const index = uniqueParts.indexOf(suffix);
+                if (index > -1) {
+                    uniqueParts.splice(index, 1);
+                }
+            });
+
+            // Construct the consolidated filename
+            const result = [...commonParts, ...uniqueParts, ...commonSuffix].join('_');
+            return result || 'merged-document';
         }
 
         function formatFileSize(bytes) {
@@ -249,14 +362,10 @@
                 const ctx = canvas.getContext('2d');
 
                 img.onload = async () => {
-                    // Set canvas size to image size
                     canvas.width = img.width;
                     canvas.height = img.height;
-
-                    // Draw image on canvas
                     ctx.drawImage(img, 0, 0);
 
-                    // Convert canvas to blob
                     canvas.toBlob(async (blob) => {
                         try {
                             const arrayBuffer = await blob.arrayBuffer();
@@ -266,7 +375,6 @@
                             if (imageFile.type === 'image/jpeg' || imageFile.type === 'image/jpg') {
                                 image = await pdfDoc.embedJpg(arrayBuffer);
                             } else {
-                                // Convert other formats to PNG
                                 const pngArrayBuffer = await new Promise((resolve) => {
                                     canvas.toBlob(async (pngBlob) => {
                                         resolve(await pngBlob.arrayBuffer());
@@ -275,15 +383,13 @@
                                 image = await pdfDoc.embedPng(pngArrayBuffer);
                             }
 
-                            // Calculate page size to fit image
                             const { width, height } = image;
-                            const maxWidth = 595; // A4 width in points
-                            const maxHeight = 842; // A4 height in points
+                            const maxWidth = 595;
+                            const maxHeight = 842;
                             
                             let pageWidth = width;
                             let pageHeight = height;
                             
-                            // Scale down if too large
                             if (width > maxWidth || height > maxHeight) {
                                 const ratio = Math.min(maxWidth / width, maxHeight / height);
                                 pageWidth = width * ratio;
@@ -344,12 +450,14 @@
                 showStatus('Generating final PDF...', 'success');
                 const pdfBytes = await mergedPdf.save();
                 
-                // Create download link
+                // Use custom filename or default
+                const filename = filenameInput.value.trim() || 'merged-document';
+                
                 const blob = new Blob([pdfBytes], { type: 'application/pdf' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'merged-document.pdf';
+                a.download = `${filename}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
