@@ -319,6 +319,10 @@
         .drag-placeholder.show {
             opacity: 1;
         }
+
+        .file-input {
+  display: none;
+}
         @media screen and (max-width: 600px) {
              body {
             

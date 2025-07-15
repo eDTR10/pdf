@@ -80,6 +80,7 @@
         document.addEventListener('drop', (e) => e.preventDefault());
 
         function handleFileSelect(event) {
+            
             const files = Array.from(event.target.files);
             addFiles(files);
         }
@@ -105,8 +106,9 @@
         }
 
         function addFiles(files) {
-            let addedCount = 0;
             
+            let addedCount = 0;
+
             files.forEach(file => {
                 if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
                     selectedFiles.push(file);
