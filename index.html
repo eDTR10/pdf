@@ -12,6 +12,12 @@
     <div class="container">
         <h1>PDF Merger & Image Converter</h1>
         
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="compressor.html" style="display: inline-block; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; font-weight: 500; transition: all 0.3s;">
+                🗜️ Go to PDF Compressor
+            </a>
+        </div>
+        
         <div class="upload-section">
             <div class="drop-zone" id="dropZone">
                 <div class="drop-zone-content">
@@ -418,12 +424,134 @@
             });
         }
 
+        async function checkPDFSignature(arrayBuffer) {
+            // Simple check for signature dictionary in PDF
+            const pdfText = new TextDecoder().decode(arrayBuffer);
+            return pdfText.includes('/Type /Sig') || pdfText.includes('/FT /Sig');
+        }
+
+        async function mergeWithPDFtk() {
+            showStatus('⚠️ Note: For preserving digital signatures, please use PDFtk (PDF Toolkit) directly via command line or install a desktop PDF merger that supports signature preservation.', 'warning');
+            
+            // Generate instructions for users
+            const instructions = generatePDFtkInstructions();
+            showPDFtkInstructions(instructions);
+        }
+
+        function generatePDFtkInstructions() {
+            const filenames = selectedFiles.map(file => file.name);
+            const outputName = filenameInput.value.trim() || 'merged-document';
+            
+            return {
+                files: filenames,
+                command: `pdftk ${filenames.join(' ')} cat output ${outputName}.pdf`,
+                outputName: outputName
+            };
+        }
+
+        function showPDFtkInstructions(instructions) {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>📋 Instructions for Preserving Digital Signatures</h3>
+                    <p>To merge PDFs while preserving digital signatures, use PDFtk (PDF Toolkit):</p>
+                    
+                    <div class="instructions-section">
+                        <h4>Step 1: Install PDFtk</h4>
+                        <p>Download from: <a href="https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/" target="_blank">https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/</a></p>
+                    </div>
+                    
+                    <div class="instructions-section">
+                        <h4>Step 2: Place your files in a folder</h4>
+                        <ul>
+                            ${instructions.files.map(file => `<li>${file}</li>`).join('')}
+                        </ul>
+                    </div>
+                    
+                    <div class="instructions-section">
+                        <h4>Step 3: Run this command in Command Prompt:</h4>
+                        <div class="command-box">
+                            <code>${instructions.command}</code>
+                            <button onclick="copyToClipboard('${instructions.command}')" class="copy-btn">📋 Copy</button>
+                        </div>
+                    </div>
+                    
+                    <div class="instructions-section">
+                        <h4>Alternative: Use Desktop PDF Tools</h4>
+                        <p>Consider using:</p>
+                        <ul>
+                            <li>Adobe Acrobat Pro</li>
+                            <li>Foxit PhantomPDF</li>
+                            <li>PDFsam Basic (free)</li>
+                        </ul>
+                    </div>
+                    
+                    <button onclick="closeModal()" class="close-modal-btn">✕ Close</button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('Command copied to clipboard!', 'success');
+            });
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                document.body.removeChild(modal);
+            }
+        }
+
+        // Update the mergePDFs function to check for signatures first
         async function mergePDFs() {
             if (selectedFiles.length < 1) return;
 
             try {
                 mergeButton.disabled = true;
                 showProgress(0);
+                showStatus('Checking for digital signatures...', 'success');
+
+                // Check for signed PDFs first
+                let hasSignedPDFs = false;
+                let signedFiles = [];
+                
+                for (const file of selectedFiles) {
+                    if (getFileType(file) === 'pdf') {
+                        const arrayBuffer = await file.arrayBuffer();
+                        if (await checkPDFSignature(arrayBuffer)) {
+                            hasSignedPDFs = true;
+                            signedFiles.push(file.name);
+                        }
+                    }
+                }
+
+                if (hasSignedPDFs) {
+                    hideProgress();
+                    mergeButton.disabled = false;
+                    
+                    const continueWithMerge = confirm(
+                        `⚠️ WARNING: The following files contain digital signatures:\n\n${signedFiles.join('\n')}\n\n` +
+                        `Merging with this tool WILL INVALIDATE the signatures!\n\n` +
+                        `Click OK to see instructions for preserving signatures, or Cancel to continue with regular merge (signatures will be lost).`
+                    );
+                    
+                    if (continueWithMerge) {
+                        mergeWithPDFtk();
+                        return;
+                    }
+                    
+                    // User chose to continue despite warnings
+                    showStatus('⚠️ Proceeding with merge - signatures will be invalidated...', 'warning');
+                    mergeButton.disabled = true;
+                    showProgress(0);
+                }
+
+                // Rest of the existing merge logic...
                 showStatus('Starting conversion and merge process...', 'success');
 
                 const mergedPdf = await PDFLib.PDFDocument.create();
@@ -435,22 +563,50 @@
                     let pdf;
                     if (fileType === 'pdf') {
                         const arrayBuffer = await file.arrayBuffer();
-                        pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+                        
+                        // Load PDF with signature preservation options
+                        pdf = await PDFLib.PDFDocument.load(arrayBuffer, {
+                            updateMetadata: false,
+                            ignoreEncryption: false,
+                            parseSpeed: PDFLib.ParseSpeeds.Fastest
+                        });
                     } else if (fileType === 'image') {
                         showStatus(`Converting image ${i + 1} of ${selectedFiles.length}...`, 'success');
                         pdf = await imageToPDF(file);
                     }
                     
                     if (pdf) {
-                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                        try {
+                            // Copy pages while attempting to preserve original structure
+                            const pageIndices = pdf.getPageIndices();
+                            const copiedPages = await mergedPdf.copyPages(pdf, pageIndices);
+                            copiedPages.forEach((page) => mergedPdf.addPage(page));
+                        } catch (error) {
+                            console.warn(`Warning: Could not copy all content from ${file.name}:`, error);
+                            // Fallback: try to copy pages individually
+                            const pageIndices = pdf.getPageIndices();
+                            for (const pageIndex of pageIndices) {
+                                try {
+                                    const [copiedPage] = await mergedPdf.copyPages(pdf, [pageIndex]);
+                                    mergedPdf.addPage(copiedPage);
+                                } catch (pageError) {
+                                    console.warn(`Could not copy page ${pageIndex + 1} from ${file.name}:`, pageError);
+                                }
+                            }
+                        }
                     }
                     
                     showProgress(((i + 1) / selectedFiles.length) * 100);
                 }
 
                 showStatus('Generating final PDF...', 'success');
-                const pdfBytes = await mergedPdf.save();
+                
+                // Save with minimal modifications to preserve as much original structure as possible
+                const pdfBytes = await mergedPdf.save({
+                    useObjectStreams: false,
+                    addDefaultPage: false,
+                    objectsPerTick: 50
+                });
                 
                 // Use custom filename or default
                 const filename = filenameInput.value.trim() || 'merged-document';
@@ -465,7 +621,11 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
 
-                showStatus('Files converted and merged successfully! Download started.', 'success');
+                if (hasSignedPDFs) {
+                    showStatus('⚠️ Files merged - Digital signatures have been invalidated as expected!', 'warning');
+                } else {
+                    showStatus('Files converted and merged successfully! Download started.', 'success');
+                }
                 hideProgress();
             } catch (error) {
                 console.error('Error processing files:', error);

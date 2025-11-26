@@ -1,4 +1,4 @@
-  * {
+* {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -300,10 +300,16 @@
             border: 1px solid #f5c6cb;
         }
 
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
         .cred {
             text-align: center;
             margin-top: 30px;
-            color: #7f8c8d;
+            color: #f1f1f1;
             font-size: 0.9em;
         }
 
@@ -350,3 +356,116 @@
             }
             
         }
+
+        /* Add this to your main.css file */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+.instructions-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+}
+
+.instructions-section h4 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.command-box {
+    display: flex;
+    align-items: center;
+    background: #2c3e50;
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    margin: 10px 0;
+}
+
+.command-box code {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    background: none;
+    color: white;
+}
+
+.copy-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+    font-size: 12px;
+}
+
+.copy-btn:hover {
+    background: #2980b9;
+}
+
+.close-modal-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-modal-btn:hover {
+    background: #c0392b;
+}
+
+.instructions-section ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.instructions-section a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.instructions-section a:hover {
+    text-decoration: underline;
+}
