@@ -5,17 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DICT | PDF Merger</title>
     <link rel="shortcut icon" href="./DICT-Logo-icon_only.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
     <link rel="stylesheet" href="./main.css">
 </head>
 <body>
     <div class="container">
-        <h1>PDF Merger & Image Converter</h1>
-        
-        <div style="text-align: center; margin-bottom: 20px;">
-            <a href="compressor.html" style="display: inline-block; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; font-weight: 500; transition: all 0.3s;">
-                🗜️ Go to PDF Compressor
-            </a>
+        <div class="app-header">
+            <div class="app-logo">&#128196; DICT PDF Tools</div>
+            <div class="app-nav">
+                <a href="editor.html" class="nav-btn ">&#9998; PDF Editor</a>
+                <a href="compressor.html" class="nav-btn">&#128928; PDF Compressor</a>
+            </div>
+        </div>
+
+        <div class="page-title">
+            <h1>PDF Merger &amp; Image Converter</h1>
+            <p>Combine multiple PDFs and images into a single PDF file</p>
         </div>
         
         <div class="upload-section">
@@ -164,13 +170,13 @@
                 return `
                     <div class="file-item" draggable="true" data-index="${index}">
                         <div class="file-info">
-                            <span class="drag-handle">⋮⋮</span>
-                            <div class="file-icon ${icon.class}">${icon.text}</div>
-                            <div>
-                                <div class="file-name">${file.name}</div>
-                                <div class="file-size">${formatFileSize(file.size)}</div>
+                                <span class="drag-handle">⋮⋮</span>
+                                <div class="file-icon ${icon.class}">${icon.text}</div>
+                                <div class="file-details">
+                                    <div class="file-name">${file.name}</div>
+                                    <div class="file-size">${formatFileSize(file.size)}</div>
+                                </div>
                             </div>
-                        </div>
                         <button class="remove-btn" onclick="removeFile(${index})">✕</button>
                     </div>
                     <div class="drag-placeholder" data-index="${index}"></div>
