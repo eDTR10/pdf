@@ -1002,17 +1002,17 @@ function attachItemEvents(item) {
   } else if (item.type === 'text') {
     const inner = item.inner || el.querySelector('.text-content') || el;
 
+    // Allow moving text overlays regardless of tool, unless editing
     el.addEventListener('mousedown', e => {
       if (e.target === inner || inner.contains(e.target)) return;
-      if (currentTool === 'text') return;
+      if (el.classList.contains('editing')) return;
       e.stopPropagation();
-      if (currentTool === 'select') startDrag(e, item);
+      startDrag(e, item);
     });
     inner.addEventListener('mousedown', e => {
       if (el.classList.contains('editing')) { e.stopPropagation(); return; }
-      if (currentTool === 'text') return;
       e.stopPropagation();
-      if (currentTool === 'select') startDrag(e, item);
+      startDrag(e, item);
     });
     el.addEventListener('dblclick', e => {
       e.stopPropagation();
@@ -1246,10 +1246,83 @@ document.getElementById('font-weight').addEventListener('change', e => {
 });
 
 // ── Keyboard shortcuts ─────────────────────────────────────
+// Copy-paste support for text overlay boxes
+let copiedOverlay = null;
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   const editing = document.activeElement.isContentEditable;
   if (editing) return;
+
+  // Copy selected text overlay (Ctrl+C)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedItem && selectedItem.type === 'text') {
+    copiedOverlay = {
+      ...selectedItem,
+      // Only copy serializable properties
+      text: (selectedItem.inner ? selectedItem.inner.innerText : selectedItem.text),
+      color: selectedItem.color,
+      fontSize: selectedItem.fontSize,
+      fontFamily: selectedItem.fontFamily,
+      fontWeight: selectedItem.fontWeight,
+      align: selectedItem.align,
+      w: selectedItem.w,
+      h: selectedItem.h
+    };
+    toast('Text box copied', 'success');
+    return;
+  }
+  // Paste text overlay (Ctrl+V)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && copiedOverlay) {
+    e.preventDefault();
+    // Place near the last selected position, offset for visibility
+    const offset = 30;
+    const x = (selectedItem ? selectedItem.x + offset : 100);
+    const y = (selectedItem ? selectedItem.y + offset : 100);
+    const item = {
+      type: 'text',
+      x, y,
+      w: copiedOverlay.w,
+      h: copiedOverlay.h,
+      color: copiedOverlay.color,
+      fontSize: copiedOverlay.fontSize,
+      fontFamily: copiedOverlay.fontFamily,
+      fontWeight: copiedOverlay.fontWeight,
+      align: copiedOverlay.align,
+      text: copiedOverlay.text
+    };
+    // Create DOM element for overlay
+    const el = document.createElement('div');
+    el.className = 'overlay-item text-overlay editing';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    // Inner editable div
+    const inner = document.createElement('div');
+    inner.className = 'text-content';
+    inner.contentEditable = 'true';
+    inner.spellcheck = false;
+    inner.style.color = item.color;
+    inner.style.fontSize = item.fontSize + 'px';
+    inner.style.fontFamily = item.fontFamily;
+    inner.style.fontWeight = item.fontWeight;
+    inner.style.textAlign = item.align;
+    inner.style.minWidth = '120px';
+    inner.innerText = item.text;
+    el.appendChild(inner);
+    // Delete button
+    const del = document.createElement('div');
+    del.className = 'del-btn';
+    del.textContent = '×';
+    el.appendChild(del);
+    item.el = el;
+    item.inner = inner;
+    (overlays[currentPage] = overlays[currentPage] || []).push(item);
+    overlayLayer.appendChild(el);
+    attachItemEvents(item);
+    setTimeout(() => { inner.focus(); setCaretEnd(inner); }, 30);
+    selectItem(item);
+    updateStatus();
+    toast('Text box pasted', 'success');
+    return;
+  }
 
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItem) {
     deleteSelected();
